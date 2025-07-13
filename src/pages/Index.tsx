@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { Upload, MessageCircle, Shield, Zap, Star, TrendingUp, Users, Bot } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Upload, MessageCircle, Shield, Zap, Star, TrendingUp, Users, Bot, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,27 @@ import BuyerInterface from "@/components/BuyerInterface";
 import TransactionCenter from "@/components/TransactionCenter";
 import FeaturedProducts from "@/components/FeaturedProducts";
 import StatsSection from "@/components/StatsSection";
+import LoginModal from "@/components/LoginModal";
+import { useAuth } from "@/hooks/useApi";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("seller");
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { user, logout, isAuthenticated } = useAuth();
+
+  // Auto-switch to appropriate tab based on user role
+  useEffect(() => {
+    console.log('Index Debug:', { isAuthenticated, user, userRole: user?.role, activeTab });
+    if (isAuthenticated && user) {
+      if (user.role === 'seller') {
+        console.log('Switching to seller tab');
+        setActiveTab('seller');
+      } else if (user.role === 'buyer') {
+        console.log('Switching to buyer tab');
+        setActiveTab('buyer');
+      }
+    }
+  }, [isAuthenticated, user]);
 
   const features = [
     {
@@ -68,10 +86,49 @@ const Index = () => {
               <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
               <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">How it Works</a>
               <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <Button variant="outline" className="border-border bg-card/50 hover:bg-card">Sign In</Button>
-              <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-                Get Started
-              </Button>
+              
+              {isAuthenticated ? (
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">
+                        {user?.username?.charAt(0).toUpperCase() || "U"}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-foreground">
+                      {user?.username || "User"}
+                    </span>
+                    <Badge variant="secondary" className="text-xs">
+                      {user?.role}
+                    </Badge>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={logout}
+                    className="border-border bg-card/50 hover:bg-card"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="border-border bg-card/50 hover:bg-card"
+                    onClick={() => setShowLoginModal(true)}
+                  >
+                    Sign In
+                  </Button>
+                  <Button 
+                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                    onClick={() => setShowLoginModal(true)}
+                  >
+                    Get Started
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -255,6 +312,12 @@ const Index = () => {
           </div>
         </footer>
       </div>
+      
+      {/* Login Modal */}
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+      />
     </div>
   );
 };

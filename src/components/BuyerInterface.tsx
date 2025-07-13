@@ -1,44 +1,134 @@
 
-import { useState } from "react";
-import { MessageCircle, Search, Heart, Star, Filter, Bot } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageCircle, Search, Heart, Star, Filter, Bot, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { useChatMessage, useVoiceMessage, useProductSuggestions, useSession } from "@/hooks/useApi";
+import type { ChatMessage, Product } from "@/lib/api";
 
 const BuyerInterface = () => {
-  const [chatMessages, setChatMessages] = useState([
+  const { sessionId } = useSession();
+  const chatMutation = useChatMessage();
+  const voiceMutation = useVoiceMessage();
+  const suggestionsMutation = useProductSuggestions();
+  
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       type: "ai",
       message: "Hi! I'm your AI shopping assistant. What are you looking for today?",
-      timestamp: "Just now"
+      timestamp: new Date().toISOString(),
+      session_id: sessionId
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    setChatMessages(prev => [
-      ...prev,
-      { type: "user", message: inputMessage, timestamp: "Just now" }
-    ]);
+    const userMessage: ChatMessage = {
+      type: "user",
+      message: inputMessage,
+      timestamp: new Date().toISOString(),
+      session_id: sessionId
+    };
 
-    // Simulate AI response
-    setTimeout(() => {
-      setChatMessages(prev => [
-        ...prev,
-        {
-          type: "ai",
-          message: "Perfect! I found several vintage sneakers under $100 that match your style. Based on your preferences and browsing history, here are my top recommendations:",
-          timestamp: "Just now"
-        }
-      ]);
-      setShowResults(true);
-    }, 1000);
-
+    setChatMessages(prev => [...prev, userMessage]);
     setInputMessage("");
+
+    try {
+      const response = await chatMutation.mutateAsync(userMessage);
+      
+      const aiMessage: ChatMessage = {
+        type: "ai",
+        message: response.response,
+        timestamp: new Date().toISOString(),
+        session_id: sessionId
+      };
+
+      setChatMessages(prev => [...prev, aiMessage]);
+
+      // If intent is product search, get suggestions
+      if (response.intent === "product_search" && response.suggestions) {
+        const suggestions = await suggestionsMutation.mutateAsync({
+          search_query: inputMessage,
+          user_preferences: response.suggestions
+        });
+        setSuggestedProducts(suggestions);
+        setShowResults(true);
+      }
+    } catch (error) {
+      toast.error("Failed to send message. Please try again.");
+      console.error("Chat error:", error);
+    }
+  };
+
+  const handleVoiceMessage = async () => {
+    if (!navigator.mediaDevices) {
+      toast.error("Voice recording not supported in this browser");
+      return;
+    }
+
+    if (isRecording) {
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioFile = new File([audioBlob], 'voice_message.wav', { type: 'audio/wav' });
+
+        try {
+          const response = await voiceMutation.mutateAsync({
+            audioFile,
+            sessionId
+          });
+
+          const aiMessage: ChatMessage = {
+            type: "ai",
+            message: response.response,
+            timestamp: new Date().toISOString(),
+            session_id: sessionId
+          };
+
+          setChatMessages(prev => [...prev, aiMessage]);
+          toast.success("Voice message processed successfully!");
+        } catch (error) {
+          toast.error("Failed to process voice message");
+          console.error("Voice error:", error);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      toast.success("Recording started... Click again to stop");
+
+      // Auto-stop after 10 seconds
+      setTimeout(() => {
+        if (isRecording) {
+          mediaRecorder.stop();
+          stream.getTracks().forEach(track => track.stop());
+          setIsRecording(false);
+        }
+      }, 10000);
+    } catch (error) {
+      toast.error("Failed to start recording");
+      console.error("Recording error:", error);
+    }
   };
 
   const mockProducts = [
@@ -104,7 +194,7 @@ const BuyerInterface = () => {
                       : "bg-white border shadow-sm"
                   }`}
                 >
-                  <p className="text-sm">{msg.message}</p>
+                  <p className={`text-sm ${msg.type === "ai" ? "text-gray-900 font-medium" : ""}`}>{msg.message}</p>
                   <p className={`text-xs mt-1 ${msg.type === "user" ? "text-blue-100" : "text-gray-500"}`}>
                     {msg.timestamp}
                   </p>
@@ -120,9 +210,26 @@ const BuyerInterface = () => {
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
               className="flex-1"
+              disabled={chatMutation.isPending}
             />
-            <Button onClick={handleSendMessage} className="bg-blue-600 hover:bg-blue-700">
-              <MessageCircle className="w-4 h-4" />
+            <Button 
+              onClick={handleVoiceMessage} 
+              variant="outline"
+              className={isRecording ? "bg-red-100 border-red-300 text-red-600" : ""}
+              disabled={voiceMutation.isPending}
+            >
+              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </Button>
+            <Button 
+              onClick={handleSendMessage} 
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={chatMutation.isPending}
+            >
+              {chatMutation.isPending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <MessageCircle className="w-4 h-4" />
+              )}
             </Button>
           </div>
 
@@ -161,7 +268,7 @@ const BuyerInterface = () => {
             </div>
           ) : (
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {mockProducts.map((product) => (
+              {suggestedProducts.map((product) => (
                 <div key={product.id} className="border rounded-lg p-4 hover:shadow-md transition-all bg-white">
                   <div className="flex gap-4">
                     <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
@@ -170,28 +277,26 @@ const BuyerInterface = () => {
                     
                     <div className="flex-1">
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-medium text-gray-900 text-sm">{product.title}</h3>
+                        <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
                         <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">
-                          {product.match}
+                          AI Match
                         </Badge>
                       </div>
                       
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="font-bold text-green-600">{product.price}</span>
-                        <span className="text-sm text-gray-500 line-through">{product.originalPrice}</span>
+                        <span className="font-bold text-green-600">${product.price}</span>
                         <Badge variant="outline" className="text-xs">{product.condition}</Badge>
                       </div>
                       
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm text-gray-600">by {product.seller}</span>
-                        <div className="flex items-center">
-                          <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                          <span className="text-xs text-gray-600">{product.rating}</span>
-                        </div>
+                        <span className="text-sm text-gray-600">by Seller #{product.seller_id}</span>
+                        {product.brand && (
+                          <span className="text-xs text-gray-500">• {product.brand}</span>
+                        )}
                       </div>
                       
                       <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                        🤖 {product.aiNote}
+                        🤖 AI Recommendation: {product.description.substring(0, 100)}...
                       </p>
                       
                       <div className="flex gap-2 mt-3">
