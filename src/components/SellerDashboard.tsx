@@ -16,6 +16,7 @@ const SellerDashboard = () => {
   const voicePriceUpdateMutation = useVoicePriceUpdate();
   
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [listingGenerated, setListingGenerated] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<ImageAnalysisResult | null>(null);
@@ -30,15 +31,16 @@ const SellerDashboard = () => {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      const file = files[0];
-      const newImages = Array.from(files).map(file => URL.createObjectURL(file));
+      const fileArray = Array.from(files);
+      const newImages = fileArray.map(file => URL.createObjectURL(file));
       setUploadedImages(prev => [...prev, ...newImages]);
+      setImageFiles(prev => [...prev, ...fileArray]);
       
       setAiGenerating(true);
       toast.success("Images uploaded! AI is analyzing your product...");
       
       try {
-        const result = await imageAnalysisMutation.mutateAsync(file);
+        const result = await imageAnalysisMutation.mutateAsync(fileArray[0]);
         setAnalysisResult(result);
         setAiGenerating(false);
         setListingGenerated(true);
@@ -115,24 +117,50 @@ const SellerDashboard = () => {
     if (!analysisResult) return;
 
     try {
+      // Convert image files to base64 URLs for storage
+      const imageUrls = await Promise.all(
+        imageFiles.map(async (file) => {
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
       const productData: Partial<Product> = {
         name: editableTitle || analysisResult.title,
         description: editableDescription || analysisResult.description,
         price: parseFloat(editablePrice || analysisResult.suggested_price.toString()),
         condition: editableCondition || analysisResult.condition,
-        category_id: 1, // Default category
+        category_id: 1, // Electronics category (ID 1)
         stock_quantity: 1,
         specifications: analysisResult.specifications,
         tags: analysisResult.tags,
+        images: imageUrls,
         is_active: true,
         is_featured: false
       };
 
+      console.log("Publishing product with data:", productData);
       await createProductMutation.mutateAsync(productData);
       toast.success("Product published successfully!");
+      
+      // Clear the form
+      setUploadedImages([]);
+      setImageFiles([]);
+      setAnalysisResult(null);
+      setListingGenerated(false);
+      setEditableTitle("");
+      setEditableDescription("");
+      setEditableCondition("");
+      setEditablePrice("");
     } catch (error) {
-      toast.error("Failed to publish product");
-      console.error("Publish error:", error);
+      console.error("Publish error details:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      toast.error(`Failed to publish product: ${errorMessage}`);
     }
   };
 
@@ -209,12 +237,22 @@ const SellerDashboard = () => {
               <p className="font-medium text-gray-700 mb-2">Uploaded Images:</p>
               <div className="grid grid-cols-3 gap-2">
                 {uploadedImages.map((image, index) => (
-                  <img
-                    key={index}
-                    src={image}
-                    alt={`Product ${index + 1}`}
-                    className="w-full h-20 object-cover rounded-lg border"
-                  />
+                  <div key={index} className="relative group">
+                    <img
+                      src={image}
+                      alt={`Product ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg border"
+                    />
+                    <button
+                      onClick={() => {
+                        setUploadedImages(prev => prev.filter((_, i) => i !== index));
+                        setImageFiles(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

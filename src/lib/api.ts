@@ -23,6 +23,7 @@ export interface Product {
   condition: string;
   specifications?: Record<string, any>;
   tags?: string[];
+  images?: string[];
   is_active: boolean;
   is_featured: boolean;
   created_at?: string;
@@ -202,19 +203,23 @@ class ApiClient {
       });
     }
 
-    return this.request<Product[]>(`/api/v1/products?${searchParams.toString()}`);
+    const response = await this.request<{ success: boolean; products: Product[]; total_found: number }>(`/api/v1/products?${searchParams.toString()}`);
+    return response.products;
   }
 
   async getProduct(id: number) {
-    return this.request<Product>(`/api/v1/products/${id}`);
+    const response = await this.request<{ success: boolean; product: Product }>(`/api/v1/products/${id}`);
+    return response.product;
   }
 
   async getFeaturedProducts() {
-    return this.request<Product[]>('/api/v1/products/featured');
+    const response = await this.request<{ success: boolean; products: Product[]; total_found: number }>('/api/v1/products/featured');
+    return response.products;
   }
 
   async getCategories() {
-    return this.request<Category[]>('/api/v1/products/categories');
+    const response = await this.request<{ success: boolean; categories: Category[] }>('/api/v1/products/categories');
+    return response.categories;
   }
 
   // Seller APIs
@@ -252,14 +257,18 @@ class ApiClient {
       throw new Error('Only sellers can create products');
     }
     
-    const requestData = {
-      ...productData,
-      seller_id: user.id
-    };
+    // Remove seller_id from productData if it exists, as it's passed as query parameter
+    const { seller_id, ...cleanProductData } = productData;
+    
+    console.log("API Client - Creating product:", {
+      url: `/api/v1/seller/products?seller_id=${user.id}`,
+      user: user,
+      productData: cleanProductData
+    });
     
     return this.request<Product>(`/api/v1/seller/products?seller_id=${user.id}`, {
       method: 'POST',
-      body: JSON.stringify(requestData),
+      body: JSON.stringify(cleanProductData),
     });
   }
 
@@ -277,7 +286,8 @@ class ApiClient {
   }
 
   async getSellerProducts() {
-    return this.request<Product[]>('/api/v1/seller/products');
+    const response = await this.request<{ success: boolean; products: Product[]; total_found: number }>('/api/v1/seller/products');
+    return response.products;
   }
 
   async updateProductWithVoice(audioFile: File, productId: number) {

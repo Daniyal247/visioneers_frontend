@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useChatMessage, useVoiceMessage, useProductSuggestions, useSession } from "@/hooks/useApi";
 import type { ChatMessage, Product } from "@/lib/api";
+import ProductDetailsModal from "./ProductDetailsModal";
 
 const BuyerInterface = () => {
   const { sessionId } = useSession();
@@ -27,6 +28,8 @@ const BuyerInterface = () => {
   const [showResults, setShowResults] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -42,7 +45,10 @@ const BuyerInterface = () => {
     setInputMessage("");
 
     try {
+      console.log("Sending message:", userMessage);
       const response = await chatMutation.mutateAsync(userMessage);
+      
+      console.log("AI Response:", response);
       
       const aiMessage: ChatMessage = {
         type: "ai",
@@ -53,14 +59,24 @@ const BuyerInterface = () => {
 
       setChatMessages(prev => [...prev, aiMessage]);
 
-      // If intent is product search, get suggestions
-      if (response.intent === "product_search" && response.suggestions) {
-        const suggestions = await suggestionsMutation.mutateAsync({
-          search_query: inputMessage,
-          user_preferences: response.suggestions
-        });
-        setSuggestedProducts(suggestions);
+      // Check if response contains products in metadata
+      if (response.metadata && response.metadata.products && response.metadata.products.length > 0) {
+        console.log("Found products in metadata:", response.metadata.products);
+        setSuggestedProducts(response.metadata.products);
         setShowResults(true);
+      } else if (response.intent === "product_search") {
+        // Fallback: get suggestions based on the search query
+        try {
+          console.log("Getting suggestions for:", inputMessage);
+          const suggestions = await suggestionsMutation.mutateAsync({
+            search_query: inputMessage,
+            user_preferences: []
+          });
+          setSuggestedProducts(suggestions);
+          setShowResults(true);
+        } catch (suggestionError) {
+          console.error("Failed to get suggestions:", suggestionError);
+        }
       }
     } catch (error) {
       toast.error("Failed to send message. Please try again.");
@@ -255,7 +271,7 @@ const BuyerInterface = () => {
             AI-Curated Results
             {showResults && (
               <Badge className="bg-purple-100 text-purple-700 border-purple-200">
-                3 perfect matches found
+                {suggestedProducts.length} perfect match{suggestedProducts.length !== 1 ? 'es' : ''} found
               </Badge>
             )}
           </CardTitle>
@@ -272,7 +288,15 @@ const BuyerInterface = () => {
                 <div key={product.id} className="border rounded-lg p-4 hover:shadow-md transition-all bg-white">
                   <div className="flex gap-4">
                     <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                      <Search className="w-6 h-6 text-gray-400" />
+                      {product.images && product.images.length > 0 ? (
+                        <img 
+                          src={product.images[0]} 
+                          alt={product.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <Search className="w-6 h-6 text-gray-400" />
+                      )}
                     </div>
                     
                     <div className="flex-1">
@@ -285,7 +309,9 @@ const BuyerInterface = () => {
                       
                       <div className="flex items-center gap-2 mb-2">
                         <span className="font-bold text-green-600">${product.price}</span>
-                        <Badge variant="outline" className="text-xs">{product.condition}</Badge>
+                        {product.condition && (
+                          <Badge variant="outline" className="text-xs">{product.condition}</Badge>
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-2 mb-2">
@@ -293,14 +319,34 @@ const BuyerInterface = () => {
                         {product.brand && (
                           <span className="text-xs text-gray-500">• {product.brand}</span>
                         )}
+                        {product.category && (
+                          <span className="text-xs text-gray-500">• {product.category}</span>
+                        )}
                       </div>
                       
-                      <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                        🤖 AI Recommendation: {product.description.substring(0, 100)}...
-                      </p>
+                      {product.description && (
+                        <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded mb-2">
+                          🤖 AI Recommendation: {product.description.length > 100 
+                            ? `${product.description.substring(0, 100)}...` 
+                            : product.description}
+                        </p>
+                      )}
+                      
+                      {product.specifications && Object.keys(product.specifications).length > 0 && (
+                        <div className="text-xs text-gray-600 mb-2">
+                          <strong>Specs:</strong> {Object.entries(product.specifications).slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(', ')}
+                        </div>
+                      )}
                       
                       <div className="flex gap-2 mt-3">
-                        <Button size="sm" className="flex-1 bg-purple-600 hover:bg-purple-700">
+                        <Button 
+                          size="sm" 
+                          className="flex-1 bg-purple-600 hover:bg-purple-700"
+                          onClick={() => {
+                            setSelectedProductId(product.id);
+                            setIsModalOpen(true);
+                          }}
+                        >
                           View Details
                         </Button>
                         <Button size="sm" variant="outline">
@@ -315,6 +361,16 @@ const BuyerInterface = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        productId={selectedProductId}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedProductId(null);
+        }}
+      />
     </div>
   );
 };

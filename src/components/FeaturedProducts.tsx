@@ -1,13 +1,25 @@
 
+import { useState } from "react";
 import { Heart, Star, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFeaturedProducts } from "@/hooks/useApi";
 import type { Product } from "@/lib/api";
+import ProductDetailsModal from "./ProductDetailsModal";
 
 const FeaturedProducts = () => {
   const { data: featuredProducts, isLoading, error } = useFeaturedProducts();
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Debug logging
+  console.log('FeaturedProducts Debug:', { 
+    isLoading, 
+    error, 
+    featuredProducts, 
+    productsCount: featuredProducts?.length 
+  });
 
   return (
     <section className="py-20 px-4">
@@ -49,8 +61,18 @@ const FeaturedProducts = () => {
               <Card key={product.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-white group">
                 <CardContent className="p-0">
                   <div className="relative">
-                    <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-6xl rounded-t-lg">
-                      {product.brand ? "📦" : "🛍️"}
+                    <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-6xl rounded-t-lg overflow-hidden">
+                      {product.images && product.images.length > 0 ? (
+                        <img 
+                          src={product.images[0]} 
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-6xl">
+                          {product.brand ? "📦" : "🛍️"}
+                        </div>
+                      )}
                     </div>
                     
                     {product.is_featured && (
@@ -99,7 +121,13 @@ const FeaturedProducts = () => {
                       🤖 AI: {product.description.substring(0, 50)}...
                     </div>
 
-                    <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm">
+                    <Button 
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm"
+                      onClick={() => {
+                        setSelectedProductId(product.id);
+                        setIsModalOpen(true);
+                      }}
+                    >
                       View Details
                     </Button>
                   </div>
@@ -119,6 +147,16 @@ const FeaturedProducts = () => {
           </Button>
         </div>
       </div>
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        productId={selectedProductId}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedProductId(null);
+        }}
+      />
     </section>
   );
 };
