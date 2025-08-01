@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useImageAnalysis, useCreateProduct, useVoicePriceUpdate, useAuth } from "@/hooks/useApi";
 import type { ImageAnalysisResult, Product } from "@/lib/api";
+import LoginModal from "./LoginModal";
 
 const SellerDashboard = () => {
   const { user, isAuthenticated } = useAuth();
@@ -27,6 +28,8 @@ const SellerDashboard = () => {
   const [editableDescription, setEditableDescription] = useState("");
   const [editableCondition, setEditableCondition] = useState("");
   const [editablePrice, setEditablePrice] = useState("");
+
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -183,7 +186,7 @@ const SellerDashboard = () => {
         <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
           <LogIn className="w-8 h-8 text-white" />
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Seller Access Required</h3>
+        <h3 className="text-xl font-semibold text-gray-350 mb-2">Seller Access Required</h3>
         <p className="text-gray-600 mb-6 max-w-md mx-auto">
           You need to be logged in as a seller to access the seller dashboard. 
           Please sign in with a seller account to continue.
@@ -193,10 +196,14 @@ const SellerDashboard = () => {
         </p>
         <Button 
           className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-          onClick={() => window.location.reload()}
+          onClick={() => setIsLoginOpen(true)}
         >
           Sign In as Seller
         </Button>
+        <LoginModal 
+          isOpen={isLoginOpen} 
+          onClose={() => setIsLoginOpen(false)} 
+        />
       </div>
     );
   }

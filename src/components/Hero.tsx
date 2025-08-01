@@ -2,8 +2,10 @@
 import { ArrowRight, Sparkles, Bot, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="relative py-20 px-4 overflow-hidden">
       {/* Background Elements */}
@@ -36,14 +38,16 @@ const Hero = () => {
             <Button 
               size="lg" 
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-8 py-4 text-lg shadow-lg"
+              onClick={() => navigate("/sell")}
             >
               Start Selling with AI
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
               size="lg" 
-              variant="outline" 
+              variant="outline"
               className="border-border bg-card/50 backdrop-blur-sm px-8 py-4 text-lg hover:bg-card"
+              onClick={() => navigate("/buy")}
             >
               <Bot className="mr-2 w-5 h-5" />
               Try AI Shopping
@@ -66,7 +70,7 @@ const Hero = () => {
             </div>
           </div>
 
-          {/* Demo Video Placeholder */}
+          {/* Demo Video Placeholder
           <div className="bg-card/80 backdrop-blur-sm rounded-2xl border border-border shadow-2xl p-8 max-w-4xl mx-auto">
             <div className="aspect-video bg-gradient-to-br from-muted/50 to-muted/30 rounded-xl flex items-center justify-center relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5"></div>
@@ -78,7 +82,7 @@ const Hero = () => {
                 <p className="text-sm text-muted-foreground mt-1">See how our AI creates listings and finds deals automatically</p>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </section>
